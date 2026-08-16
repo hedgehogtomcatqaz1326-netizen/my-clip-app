@@ -27,15 +27,11 @@ export default function Home() {
   const [newIsMasked, setNewIsMasked] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // カテゴリごとの折りたたみ状態（初期状態はすべて開く）
-  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
-    基本情報: true,
-    "ログイン・パスワード": true,
-    その他: true,
-  });
+  // 各項目IDごとの折りたたみ状態（true = 開いている, false = 閉じている）
+  const [openItemIds, setOpenItemIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    const saved = localStorage.getItem("my_info_clipboard_v4");
+    const saved = localStorage.getItem("my_info_clipboard_v5");
     if (saved) {
       try {
         setItems(JSON.parse(saved));
@@ -47,7 +43,7 @@ export default function Home() {
 
   const saveItems = (newItems: Item[]) => {
     setItems(newItems);
-    localStorage.setItem("my_info_clipboard_v4", JSON.stringify(newItems));
+    localStorage.setItem("my_info_clipboard_v5", JSON.stringify(newItems));
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -59,8 +55,9 @@ export default function Home() {
   const addItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLabel.trim() || !newValue.trim()) return;
+    const newId = Date.now().toString();
     const newItem: Item = {
-      id: Date.now().toString(),
+      id: newId,
       label: newLabel,
       value: newValue,
       tag: newTag,
@@ -68,8 +65,8 @@ export default function Home() {
     };
     saveItems([...items, newItem]);
     
-    // 追加したカテゴリを自動で開く
-    setOpenCategories((prev) => ({ ...prev, [newTag]: true }));
+    // 追加した項目は自動で開く
+    setOpenItemIds((prev) => ({ ...prev, [newId]: true }));
 
     setNewLabel("");
     setNewValue("");
@@ -87,32 +84,21 @@ export default function Home() {
     saveItems(updated);
   };
 
-  // 折りたたみの開閉トグル
-  const toggleCategory = (category: string) => {
-    setOpenCategories((prev) => ({
+  // 個別項目の開閉トグル
+  const toggleItemOpen = (id: string) => {
+    setOpenItemIds((prev) => ({
       ...prev,
-      [category]: !prev[category],
+      [id]: !prev[id],
     }));
   };
 
-  // 一括開閉
-  const setAllCategories = (isOpen: boolean) => {
+  // 全項目の開閉を一括切り替え
+  const setAllItemsOpen = (isOpen: boolean) => {
     const newState: Record<string, boolean> = {};
-    CATEGORIES.forEach((cat) => {
-      newState[cat] = isOpen;
+    items.forEach((item) => {
+      newState[item.id] = isOpen;
     });
-    setOpenCategories(newState);
-  };
-
-  // 指定のカテゴリ場所へスクロール（閉じていれば開く）
-  const scrollToCategory = (category: string) => {
-    setOpenCategories((prev) => ({ ...prev, [category]: true }));
-    setTimeout(() => {
-      const element = document.getElementById(`cat-${category}`);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth" });
-      }
-    }, 50);
+    setOpenItemIds(newState);
   };
 
   return (
@@ -121,36 +107,22 @@ export default function Home() {
         <h1 className="text-2xl font-bold text-gray-800">マイ情報クリップボード</h1>
       </header>
 
-      {/* クイックジャンプ＆一括開閉ナビ */}
-      <div className="sticky top-0 bg-white/90 backdrop-blur-sm py-3 border-b mb-6 z-10">
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="text-xs text-gray-500 font-bold">ワンタップジャンプ:</div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setAllCategories(true)}
-              className="text-[10px] text-blue-600 underline hover:text-blue-800"
-            >
-              すべて開く
-            </button>
-            <span className="text-gray-300">|</span>
-            <button
-              onClick={() => setAllCategories(false)}
-              className="text-[10px] text-gray-500 underline hover:text-gray-700"
-            >
-              すべて閉じる
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => scrollToCategory(cat)}
-              className="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-slate-700 active:scale-95 transition-all"
-            >
-              ↓ {cat}
-            </button>
-          ))}
+      {/* 一括開閉コントロール */}
+      <div className="sticky top-0 bg-white/90 backdrop-blur-sm py-3 border-b mb-6 z-10 flex items-center justify-between">
+        <div className="text-xs text-gray-500 font-bold">表示設定:</div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setAllItemsOpen(true)}
+            className="px-3 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-xs font-bold transition-colors"
+          >
+            全項目を開く
+          </button>
+          <button
+            onClick={() => setAllItemsOpen(false)}
+            className="px-3 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-xs font-bold transition-colors"
+          >
+            全項目を閉じる
+          </button>
         </div>
       </div>
 
@@ -160,14 +132,14 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <input
             type="text"
-            placeholder="項目名（例: メールのパスワード）"
+            placeholder="項目名（例: 姓, 電話番号, パスワード）"
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             className="p-2 border rounded text-sm w-full bg-white"
           />
           <input
             type="text"
-            placeholder="内容（例: pass1234）"
+            placeholder="内容（例: 山田, 090-0000-0000）"
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
             className="p-2 border rounded text-sm w-full bg-white"
@@ -205,82 +177,87 @@ export default function Home() {
         </div>
       </form>
 
-      {/* カテゴリごとの一覧（折りたたみ式） */}
+      {/* カテゴリごとのリスト */}
       <div className="space-y-6">
         {CATEGORIES.map((cat) => {
           const categoryItems = items.filter((item) => item.tag === cat);
-          const isOpen = !!openCategories[cat];
+          if (categoryItems.length === 0) return null;
 
           return (
-            <div key={cat} id={`cat-${cat}`} className="scroll-mt-20 border rounded-xl overflow-hidden bg-white shadow-sm">
-              {/* 折りたたみヘッダー */}
-              <button
-                onClick={() => toggleCategory(cat)}
-                className="w-full flex items-center justify-between p-3.5 bg-slate-100 hover:bg-slate-200/70 transition-colors text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-800">{cat}</span>
-                  <span className="text-xs bg-white text-slate-600 border px-2 py-0.5 rounded-full font-bold">
-                    {categoryItems.length}件
-                  </span>
-                </div>
-                <span className="text-xs text-slate-500 font-bold">
-                  {isOpen ? "▲ 閉じる" : "▼ 開く"}
-                </span>
-              </button>
+            <div key={cat} className="space-y-2">
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">
+                {cat}
+              </h2>
 
-              {/* 開閉コンテンツ */}
-              {isOpen && (
-                <div className="p-3 space-y-3 bg-white">
-                  {categoryItems.length === 0 ? (
-                    <div className="text-xs text-gray-400 py-2 text-center">項目がありません</div>
-                  ) : (
-                    categoryItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-3 border rounded-lg bg-white shadow-xs gap-2 hover:border-slate-300 transition-colors"
+              <div className="space-y-2">
+                {categoryItems.map((item) => {
+                  const isOpen = !!openItemIds[item.id];
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="border rounded-lg bg-white shadow-xs overflow-hidden hover:border-slate-300 transition-colors"
+                    >
+                      {/* 項目の折りたたみヘッダー */}
+                      <button
+                        onClick={() => toggleItemOpen(item.id)}
+                        className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
                       >
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs text-gray-500 font-medium truncate">
-                            {item.label}
-                          </div>
-                          <div className="text-base font-bold text-gray-800 truncate font-mono">
+                        <span className="text-sm font-bold text-slate-800">
+                          {item.label}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {!isOpen && (
+                            <span className="text-xs text-gray-400 font-mono truncate max-w-[120px] sm:max-w-[200px]">
+                              {item.isMasked ? "••••••••" : item.value}
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-400 font-bold">
+                            {isOpen ? "▲" : "▼"}
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* 項目の詳細コンテンツ（開いている時のみ表示） */}
+                      {isOpen && (
+                        <div className="p-3 border-t bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="text-base font-bold text-gray-800 font-mono break-all">
                             {item.isMasked ? "••••••••" : item.value}
                           </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                            <button
+                              onClick={() => toggleMask(item.id)}
+                              className="p-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded border"
+                              title={item.isMasked ? "表示する" : "隠す"}
+                            >
+                              {item.isMasked ? "👁️ 表示" : "🙈 隠す"}
+                            </button>
+
+                            <button
+                              onClick={() => copyToClipboard(item.value, item.id)}
+                              className={`px-3 py-1.5 text-white rounded text-sm font-bold transition-colors ${
+                                copiedId === item.id
+                                  ? "bg-gray-700"
+                                  : "bg-emerald-600 hover:bg-emerald-700"
+                              }`}
+                            >
+                              {copiedId === item.id ? "完了!" : "コピー"}
+                            </button>
+
+                            <button
+                              onClick={() => deleteItem(item.id)}
+                              className="px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 border border-red-200 rounded"
+                            >
+                              削除
+                            </button>
+                          </div>
                         </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => toggleMask(item.id)}
-                            className="p-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded border"
-                            title={item.isMasked ? "表示する" : "隠す"}
-                          >
-                            {item.isMasked ? "👁️" : "🙈"}
-                          </button>
-
-                          <button
-                            onClick={() => copyToClipboard(item.value, item.id)}
-                            className={`px-3 py-1.5 text-white rounded text-sm font-bold transition-colors ${
-                              copiedId === item.id
-                                ? "bg-gray-700"
-                                : "bg-emerald-600 hover:bg-emerald-700"
-                            }`}
-                          >
-                            {copiedId === item.id ? "完了!" : "コピー"}
-                          </button>
-
-                          <button
-                            onClick={() => deleteItem(item.id)}
-                            className="px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 border border-red-200 rounded"
-                          >
-                            削除
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
