@@ -4,25 +4,25 @@ import CredentialsProvider from "next-auth/providers/credentials";
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
-      name: "Password Login",
+      name: "ログイン",
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
+        email: { label: "メールアドレス", type: "email", placeholder: "admin@example.com" },
+        password: { label: "パスワード", type: "password" }
       },
       async authorize(credentials) {
         if (
           credentials?.email === "admin@example.com" &&
           credentials?.password === "password123"
         ) {
-          return { id: "1", name: "User", email: "admin@example.com" };
+          return { id: "1", name: "管理者ユーザー", email: "admin@example.com" };
         }
         return null;
-      },
-    }),
+      }
+    })
   ],
   session: {
-    strategy: "jwt",
-  },
+    strategy: "jwt"
+  }
 };
 
 const handler = NextAuth(authOptions);
