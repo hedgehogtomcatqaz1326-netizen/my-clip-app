@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type Item = {
   id: string;
@@ -27,11 +27,16 @@ export default function Home() {
   const [newIsMasked, setNewIsMasked] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // 各項目IDごとの折りたたみ状態（true = 開いている, false = 閉じている）
+  // 各項目IDごとの折りたたみ状態
   const [openItemIds, setOpenItemIds] = useState<Record<string, boolean>>({});
 
+  // ドラッグ操作用の参照
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
   useEffect(() => {
-    const saved = localStorage.getItem("my_info_clipboard_v5");
+    const saved = localStorage.getItem("my_info_clipboard_v6");
     if (saved) {
       try {
         setItems(JSON.parse(saved));
@@ -43,7 +48,7 @@ export default function Home() {
 
   const saveItems = (newItems: Item[]) => {
     setItems(newItems);
-    localStorage.setItem("my_info_clipboard_v5", JSON.stringify(newItems));
+    localStorage.setItem("my_info_clipboard_v6", JSON.stringify(newItems));
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -101,27 +106,66 @@ export default function Home() {
     setOpenItemIds(newState);
   };
 
+  // 上下移動ボタンによる並び替え
+  const moveItem = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= items.length) return;
+
+    const updated = [...items];
+    const [movedItem] = updated.splice(index, 1);
+    updated.splice(targetIndex, 0, movedItem);
+    saveItems(updated);
+  };
+
+  // ドラッグ＆ドロップ処理
+  const handleDragStart = (index: number, id: string) => {
+    dragItem.current = index;
+    setDraggingId(id);
+  };
+
+  const handleDragEnter = (index: number) => {
+    dragOverItem.current = index;
+  };
+
+  const handleDragEnd = () => {
+    if (
+      dragItem.current !== null &&
+      dragOverItem.current !== null &&
+      dragItem.current !== dragOverItem.current
+    ) {
+      const updated = [...items];
+      const [draggedItemContent] = updated.splice(dragItem.current, 1);
+      updated.splice(dragOverItem.current, 0, draggedItemContent);
+      saveItems(updated);
+    }
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDraggingId(null);
+  };
+
   return (
     <main className="max-w-2xl mx-auto p-6 pb-24">
       <header className="pb-4 border-b mb-4">
         <h1 className="text-2xl font-bold text-gray-800">マイ情報クリップボード</h1>
       </header>
 
-      {/* 一括開閉コントロール */}
+      {/* 一括開閉＆並び替えヒント */}
       <div className="sticky top-0 bg-white/90 backdrop-blur-sm py-3 border-b mb-6 z-10 flex items-center justify-between">
-        <div className="text-xs text-gray-500 font-bold">表示設定:</div>
+        <div className="text-xs text-gray-500 font-bold">
+          ドラッグ（⋮⋮）または矢印（↑↓）で並び替え可能
+        </div>
         <div className="flex gap-2">
           <button
             onClick={() => setAllItemsOpen(true)}
-            className="px-3 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-xs font-bold transition-colors"
+            className="px-2.5 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-xs font-bold transition-colors"
           >
-            全項目を開く
+            全開く
           </button>
           <button
             onClick={() => setAllItemsOpen(false)}
-            className="px-3 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-xs font-bold transition-colors"
+            className="px-2.5 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-xs font-bold transition-colors"
           >
-            全項目を閉じる
+            全閉じる
           </button>
         </div>
       </div>
@@ -191,36 +235,83 @@ export default function Home() {
 
               <div className="space-y-2">
                 {categoryItems.map((item) => {
+                  const globalIndex = items.findIndex((i) => i.id === item.id);
                   const isOpen = !!openItemIds[item.id];
+                  const isDragging = draggingId === item.id;
 
                   return (
                     <div
                       key={item.id}
-                      className="border rounded-lg bg-white shadow-xs overflow-hidden hover:border-slate-300 transition-colors"
+                      draggable
+                      onDragStart={() => handleDragStart(globalIndex, item.id)}
+                      onDragEnter={() => handleDragEnter(globalIndex)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => e.preventDefault()}
+                      className={`border rounded-lg bg-white shadow-xs overflow-hidden transition-all ${
+                        isDragging ? "opacity-40 border-blue-400 bg-blue-50" : "hover:border-slate-300"
+                      }`}
                     >
-                      {/* 項目の折りたたみヘッダー */}
-                      <button
-                        onClick={() => toggleItemOpen(item.id)}
-                        className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
-                      >
-                        <span className="text-sm font-bold text-slate-800">
-                          {item.label}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {!isOpen && (
-                            <span className="text-xs text-gray-400 font-mono truncate max-w-[120px] sm:max-w-[200px]">
-                              {item.isMasked ? "••••••••" : item.value}
-                            </span>
-                          )}
-                          <span className="text-xs text-slate-400 font-bold">
-                            {isOpen ? "▲" : "▼"}
+                      {/* 項目のヘッダー */}
+                      <div className="flex items-center justify-between p-2.5 bg-slate-50 border-b border-slate-100">
+                        {/* ドラッグ用ハンドル & ラベル */}
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span
+                            className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 select-none text-base font-bold px-1"
+                            title="ドラッグして並び替え"
+                          >
+                            ⋮⋮
                           </span>
+                          <button
+                            onClick={() => toggleItemOpen(item.id)}
+                            className="text-left font-bold text-slate-800 text-sm truncate flex-1"
+                          >
+                            {item.label}
+                          </button>
                         </div>
-                      </button>
 
-                      {/* 項目の詳細コンテンツ（開いている時のみ表示） */}
+                        {/* 上下移動ボタン & 開閉トグル */}
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <div className="flex bg-white border rounded overflow-hidden">
+                            <button
+                              onClick={() => moveItem(globalIndex, "up")}
+                              disabled={globalIndex === 0}
+                              className="px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30 border-r"
+                              title="上へ移動"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              onClick={() => moveItem(globalIndex, "down")}
+                              disabled={globalIndex === items.length - 1}
+                              className="px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                              title="下へ移動"
+                            >
+                              ↓
+                            </button>
+                          </div>
+
+                          <button
+                            onClick={() => toggleItemOpen(item.id)}
+                            className="p-1 text-xs text-slate-400 font-bold hover:text-slate-600"
+                          >
+                            {isOpen ? "▲" : "▼"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 閉じている時の事前表示（簡易値） */}
+                      {!isOpen && (
+                        <div
+                          onClick={() => toggleItemOpen(item.id)}
+                          className="px-3 py-1.5 text-xs text-gray-400 font-mono truncate cursor-pointer hover:bg-slate-50/50"
+                        >
+                          {item.isMasked ? "••••••••" : item.value}
+                        </div>
+                      )}
+
+                      {/* 開いている時の詳細コンテンツ */}
                       {isOpen && (
-                        <div className="p-3 border-t bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t">
                           <div className="text-base font-bold text-gray-800 font-mono break-all">
                             {item.isMasked ? "••••••••" : item.value}
                           </div>
