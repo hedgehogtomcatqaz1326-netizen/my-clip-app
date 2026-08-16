@@ -1,21 +1,19 @@
-import "./globals.css";
-import Providers from "@/components/Providers";
+import type { Metadata } from 'next'
+import './globals.css'
 
-export const metadata = {
-  title: "マイ情報クリップボード",
-  description: "ワンタップで個人情報をコピーできるツール",
-};
+export const metadata: Metadata = {
+  title: 'My Info Clipboard',
+  description: 'クリップボード共有アプリ',
+}
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
     <html lang="ja">
-      <body>
-        <Providers>{children}</Providers>
-      </body>
+      <body>{children}</body>
     </html>
-  );
+  )
 }
